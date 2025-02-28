@@ -132,6 +132,8 @@ func (ap *AlertProtocol) onP2PAlertMessage(s network.Stream) {
 	log.Debugf("Received Alert message authored by %s and forwarded by %s",
 		alert.Metadata.OriginalSender.NodeId, s.Conn().RemotePeer())
 
+	log.Infof("Alert message: metadata:%s; contents: %s", alert.Metadata, string(alert.Payload))
+
 	resp, err := ap.createRedisAlert(s, alert.Payload)
 	if err != nil {
 		log.Errorf("error creating alert message for redis: %s", err)

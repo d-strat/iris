@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -114,17 +115,21 @@ type PeerDiscovery struct {
 }
 
 type IdentityConfig struct {
-	GenerateNewKey  bool
-	LoadKeyFromFile string
-	SaveKeyToFile   string
+	GenerateNewKey bool
+	KeyFile        string
 }
 
 func (ic *IdentityConfig) validate() error {
-	if ic.GenerateNewKey && ic.LoadKeyFromFile != "" {
-		return errors.New("cannot generate new key and load one from file at the same time")
+	if ic.KeyFile == "" && ic.GenerateNewKey {
+		ic.KeyFile = "private.key"
+	} else if ic.KeyFile == "" {
+		return errors.New("specify key file")
 	}
-	if !ic.GenerateNewKey && ic.LoadKeyFromFile == "" {
-		return errors.New("specify either to generate a new key or load one from a file")
+	_, err := os.Stat(ic.KeyFile)
+	if os.IsNotExist(err) {
+		ic.GenerateNewKey = true
+	} else {
+		ic.GenerateNewKey = false
 	}
 	return nil
 }

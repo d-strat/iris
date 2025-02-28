@@ -131,7 +131,7 @@ func main() {
 	// load or generate new private key of the organization
 	var i config.IdentityConfig
 	if *loadKeyPath != "" {
-		i = config.IdentityConfig{LoadKeyFromFile: *loadKeyPath}
+		i = config.IdentityConfig{KeyFile: *loadKeyPath}
 	} else {
 		if *saveKeyPath == "" {
 			fatal(2, fmt.Errorf("--save-key-path must be set"+

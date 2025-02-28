@@ -15,19 +15,17 @@ func GetPrivateKey(conf *config.IdentityConfig) (key libp2pcrypto.PrivKey, err e
 		if err != nil {
 			return nil, err
 		}
+		err := saveKeyToFile(conf.KeyFile, key)
+		if err != nil {
+			return nil, err
+		}
 	} else {
-		key, err = loadKeyFromFile(conf.LoadKeyFromFile)
+		key, err = loadKeyFromFile(conf.KeyFile)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	if conf.SaveKeyToFile != "" {
-		err := saveKeyToFile(conf.SaveKeyToFile, key)
-		if err != nil {
-			return nil, err
-		}
-	}
 	return key, nil
 }
 

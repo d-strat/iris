@@ -38,9 +38,12 @@ type Node struct {
 	orgBook *org.Book
 	conf    *config.Config
 	ctx     context.Context
+	cancel  context.CancelFunc
 }
 
-func NewNode(conf *config.Config, ctx context.Context) (*Node, error) {
+func NewNode(conf *config.Config, parentctx context.Context) (*Node, error) {
+	ctx, cancel := context.WithCancel(parentctx)
+
 	key, err := cryptotools.GetPrivateKey(&conf.Identity)
 	if err != nil {
 		return nil, err
@@ -68,7 +71,7 @@ func NewNode(conf *config.Config, ctx context.Context) (*Node, error) {
 		libp2p.NATPortMap(),
 		// Let this host use the DHT to find other hosts
 		libp2p.Routing(func(h host.Host) (routing.PeerRouting, error) {
-			dht, err = ldht.New(ctx, h, conf.Server.DhtServerMode)
+			dht, err = ldht.New(parentctx, h, conf.Server.DhtServerMode)
 			return dht, err
 		}),
 		// Let this host use relays and advertise itself on relays if
@@ -88,7 +91,7 @@ func NewNode(conf *config.Config, ctx context.Context) (*Node, error) {
 	}
 
 	// create redis client
-	redisClient, err := clients.NewRedisClient(&conf.Redis, ctx)
+	redisClient, err := clients.NewRedisClient(&conf.Redis, parentctx)
 	if err != nil {
 		return nil, errors.Errorf("error creating redis client: %s", err)
 	}
@@ -109,6 +112,7 @@ func NewNode(conf *config.Config, ctx context.Context) (*Node, error) {
 		orgBook: orgBook,
 		conf:    conf,
 		ctx:     ctx,
+		cancel:  cancel,
 	}
 
 	// setup kits
@@ -118,13 +122,13 @@ func NewNode(conf *config.Config, ctx context.Context) (*Node, error) {
 	// setup all protocols
 	n.OrgSigProtocol = protocols.NewOrgSigProtocol(protoUtils)
 	n.AlertProtocol = protocols.NewAlertProtocol(protoUtils)
-	n.RecommendationProtocol = protocols.NewRecommendationProtocol(ctx, protoUtils, &conf.ProtocolSettings.Recommendation)
-	n.IntelligenceProtocol = protocols.NewIntelligenceProtocol(ctx, protoUtils, &conf.ProtocolSettings.Intelligence)
-	n.FileShareProtocol = protocols.NewFileShareProtocol(ctx, protoUtils, fileBook, dht, &conf.ProtocolSettings.FileShare)
+	n.RecommendationProtocol = protocols.NewRecommendationProtocol(parentctx, protoUtils, &conf.ProtocolSettings.Recommendation)
+	n.IntelligenceProtocol = protocols.NewIntelligenceProtocol(parentctx, protoUtils, &conf.ProtocolSettings.Intelligence)
+	n.FileShareProtocol = protocols.NewFileShareProtocol(parentctx, protoUtils, fileBook, dht, &conf.ProtocolSettings.FileShare)
 	_ = protocols.NewReliabilityReceiver(protoUtils, relBook)
 
 	connecter := connmgr.NewConnecter(&conf.Connections, protoUtils)
-	connecter.Start(ctx)
+	connecter.Start(parentctx)
 
 	// inject missing dependencies
 	cm.SetDeps(protoUtils, n.OrgSigProtocol, connecter)
@@ -150,6 +154,26 @@ func (n *Node) connectToInitPeers() {
 	}
 }
 
+func (n *Node) Shutdown() {
+	log.Info("Shutting down node...")
+
+	// Cancel the context to stop all goroutines using it
+	n.cancel()
+
+	// Close the DHT
+	if n.dht != nil {
+		n.dht.Close()
+	}
+
+	// Close the libp2p host
+	if n.Host != nil {
+		_ = n.Host.Close()
+	}
+
+	// Any additional cleanup if necessary
+	log.Info("Node shutdown complete.")
+}
+
 // advertiseMyOrgs tells the network that I am member of my organizations
 func (n *Node) advertiseMyOrgs(_ context.Context) {
 	for _, o := range n.orgBook.MyOrgs {
@@ -172,6 +196,13 @@ func (n *Node) Start(ctx context.Context) {
 	// tell the network which organisations I am member of
 	n.advertiseMyOrgs(ctx)
 
-	// block running
-	<-make(chan struct{})
+	log.Info("Waiting for termination.")
+
+	// Wait for cancellation signal
+	<-ctx.Done()
+
+	log.Info("Context done shutdown imminent.")
+
+	// Cleanup before exiting
+	n.Shutdown()
 }

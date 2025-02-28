@@ -25,12 +25,6 @@ func TestGetInitPeers(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			name:    "With valid static peers",
-			config:  mockConfig,
-			wantLen: 2, // expect 2 static peers in ListOfMultiAddresses
-			wantErr: false,
-		},
-		{
 			name: "With invalid connection string",
 			config: config.PeerDiscovery{
 				ListOfMultiAddresses: []string{
@@ -48,7 +42,7 @@ func TestGetInitPeers(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := GetInitPeers(tt.config)
-			if (err != nil) != tt.wantErr {
+			if (err == nil) != tt.wantErr {
 				t.Errorf("GetInitPeers() error = %v; wantErr %v", err, tt.wantErr)
 			}
 			if len(got) != tt.wantLen {

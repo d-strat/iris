@@ -4,6 +4,9 @@ import (
 	"context"
 	"flag"
 	"math/rand"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	logging "github.com/ipfs/go-log/v2"
@@ -39,7 +42,12 @@ func loadConfig() (*config.Config, error) {
 }
 
 func main() {
-	rand.Seed(time.Now().UnixNano()) // Todo use something more cryptographically secure
+	lvl, err := logging.LevelFromString("info")
+	if err != nil {
+		log.Fatal(err)
+	}
+	logging.SetAllLoggers(lvl)
+	rand.Seed(time.Now().UnixNano())
 
 	// load configuration
 	cfg, err := loadConfig()
@@ -47,8 +55,8 @@ func main() {
 		log.Fatal(err)
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
 
 	// create p2p node
 	localNode, err := node.NewNode(cfg, ctx)
@@ -63,5 +71,5 @@ func main() {
 	}
 
 	localNode.Start(ctx)
-	log.Infof("finished, program terminating...")
+	log.Info("finished, program terminating...")
 }
